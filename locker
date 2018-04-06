@@ -1,0 +1,79 @@
+#!/bin/bash
+set -e
+base="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+TEMP="$(mktemp -d 'locker.XXXXXXXXXX')"
+[ -n "$TEMP" -a -d "$TEMP" -a -w "$TEMP" ] || exit 1
+_cleanup(){ rm -rf "$TEMP"; }
+trap _cleanup EXIT
+
+usage(){
+	printf 'usage (public-key encrypt): ./locker.sh --public-key=mykey.pub --input=myfile --output=myfile.enc\n'
+	printf 'usage (private-key decrypt): ./locker.sh --private-key=mykey.pub --input=myfile.enc --output=myfile\n'
+	printf 'usage (password encrypt): ./locker.sh --password-encrypt --input=myfile --output=myfile.enc\n'
+	printf 'usage (password decrypt): ./locker.sh --password-decrypt --input=myfile.enc --output=myfile\n'
+}
+
+seckey=
+pubkey=
+dosym=
+input=
+output=
+while [[ $# -gt 0 ]]; do
+	arg="$1"; shift
+
+	case "$arg" in
+		--private-key=*)
+			seckey="${arg#*=}"
+		;;
+		--public-key=*)
+			pubkey="${arg#*=}"
+		;;
+		--password-encrypt)
+			dosym=encrypt
+		;;
+		--password-decrypt)
+			dosym=decrypt
+		;;
+		--input=*)
+			input="${arg#*=}"
+		;;
+		--output=*)
+			output="${arg#*=}"
+		;;
+		--help)
+			usage
+			exit
+		;;
+		*)
+			usage >&2
+			exit 1
+		;;
+	esac
+done
+
+if [[ -z "$input" ]] || [[ -z "$output" ]] || [[ -z "$seckey$pubkey$dosym" ]]; then
+	usage >&2
+	exit 1
+fi
+
+if [[ "$dosym" = "encrypt" ]]; then
+	openssl enc -aes-256-cbc -salt -in "$input" -out "$output"
+elif [[ "$dosym" = "decrypt" ]]; then
+	openssl enc -d -aes-256-cbc -in "$input" -out "$output"
+elif [[ -n "$seckey" ]]; then
+	tar -C "$TEMP" -zxf "$input"
+	openssl rsautl -decrypt -inkey "$seckey" -in "$TEMP/key.bin.enc" |
+	openssl enc -d -aes-256-cbc -in "$TEMP/payload.bin.enc" -out "$output" -pass fd:0
+else
+	if [[ "$(head -c 4 "$pubkey" )" = "ssh-" ]]; then
+		ssh-keygen -f "$pubkey" -e -m PKCS8 > "$TEMP/pub.pem"
+		pubkey="$TEMP/pub.pem"
+	fi
+
+	openssl rand -base64 128 |
+	tee \
+		>( openssl rsautl -encrypt -inkey "$pubkey" -pubin -in /dev/stdin -out "$TEMP/key.bin.enc" ) \
+		| openssl enc -aes-256-cbc -salt -in "$input" -out "$TEMP/payload.bin.enc" -pass fd:0
+
+	tar --transform='s#.*/##' -zcf "$output" "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc"
+fi
