@@ -11,11 +11,15 @@ usage(){
 	printf 'usage (private-key decrypt): ./locker.sh --private-key=mykey.pub --input=myfile.enc --output=myfile\n'
 	printf 'usage (password encrypt): ./locker.sh --password-encrypt --input=myfile --output=myfile.enc\n'
 	printf 'usage (password decrypt): ./locker.sh --password-decrypt --input=myfile.enc --output=myfile\n'
+	printf 'Other options:\n'
+	printf '    --base64 encode outputs (or decode inputs) prior to encrypting/decrypting\n'
+	printf '    --help   print this message and exit\n'
 }
 
 seckey=
 pubkey=
 dosym=
+dobase64=
 input=
 output=
 while [[ $# -gt 0 ]]; do
@@ -33,6 +37,9 @@ while [[ $# -gt 0 ]]; do
 		;;
 		--password-decrypt)
 			dosym=decrypt
+		;;
+		--base64)
+			dobase64=1
 		;;
 		--input=*)
 			input="${arg#*=}"
@@ -56,12 +63,31 @@ if [[ -z "$input" ]] || [[ -z "$output" ]] || [[ -z "$seckey$pubkey$dosym" ]]; t
 	exit 1
 fi
 
+dobase64_decode(){
+	local input="$1"; shift
+	if [[ "$dobase64" = "1" ]]; then
+		base64 -d < "$input"
+	else
+		cat "$input"
+	fi
+}
+
+dobase64_encode(){
+	local output="$1"; shift
+
+	if [[ "$dobase64" = "1" ]]; then
+		base64 > "$output"
+	else
+		cat > "$output"
+	fi
+}
+
 if [[ "$dosym" = "encrypt" ]]; then
-	openssl enc -aes-256-cbc -salt -in "$input" -out "$output"
+	openssl enc -aes-256-cbc -salt -in "$input" | dobase64_encode "$output"
 elif [[ "$dosym" = "decrypt" ]]; then
-	openssl enc -d -aes-256-cbc -in "$input" -out "$output"
+	openssl enc -d -aes-256-cbc -in <( dobase64_decode "$input" ) -out "$output"
 elif [[ -n "$seckey" ]]; then
-	tar -C "$TEMP" -zxf "$input"
+	tar -C "$TEMP" -zxf <( dobase64_decode "$input" )
 	openssl rsautl -decrypt -inkey "$seckey" -in "$TEMP/key.bin.enc" |
 	openssl enc -d -aes-256-cbc -in "$TEMP/payload.bin.enc" -pass fd:0 | gzip -d -c > "$output"
 else
@@ -80,5 +106,5 @@ else
 		printf 'Failed to encrypt random key\n' >&2
 		exit 1
 	fi
-	tar --transform='s#.*/##' -c "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc" | gzip -c > "$output"
+	tar --transform='s#.*/##' -c "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc" | gzip -c | dobase64_encode "$output"
 fi
