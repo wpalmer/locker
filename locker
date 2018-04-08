@@ -63,7 +63,7 @@ elif [[ "$dosym" = "decrypt" ]]; then
 elif [[ -n "$seckey" ]]; then
 	tar -C "$TEMP" -zxf "$input"
 	openssl rsautl -decrypt -inkey "$seckey" -in "$TEMP/key.bin.enc" |
-	openssl enc -d -aes-256-cbc -in "$TEMP/payload.bin.enc" -out "$output" -pass fd:0
+	openssl enc -d -aes-256-cbc -in "$TEMP/payload.bin.enc" -pass fd:0 | gzip -d -c > "$output"
 else
 	if [[ "$(head -c 4 "$pubkey" )" = "ssh-" ]]; then
 		ssh-keygen -f "$pubkey" -e -m PKCS8 > "$TEMP/pub.pem"
@@ -73,12 +73,12 @@ else
 	openssl rand -base64 128 |
 	tee \
 		>( openssl rsautl -encrypt -inkey "$pubkey" -pubin -in /dev/stdin -out "$TEMP/key.bin.enc" && touch "$TEMP/key.bin.ok" || touch "$TEMP/key.bin.fail" ) \
-		| openssl enc -aes-256-cbc -salt -in "$input" -out "$TEMP/payload.bin.enc" -pass fd:0
+		| openssl enc -aes-256-cbc -salt -in <( gzip -c < "$input" ) -out "$TEMP/payload.bin.enc" -pass fd:0
 
 	while [[ ! -e "$TEMP/key.bin.ok" ]] && [[ ! -e "$TEMP/key.bin.fail" ]]; do sleep 0.001; done
 	if [[ -e "$TEMP/key.bin.fail" ]]; then
 		printf 'Failed to encrypt random key\n' >&2
 		exit 1
 	fi
-	tar --transform='s#.*/##' -zcf "$output" "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc"
+	tar --transform='s#.*/##' -c "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc" | gzip -c > "$output"
 fi
