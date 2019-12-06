@@ -88,9 +88,9 @@ dobase64_encode(){
 }
 
 if [[ "$dosym" = "encrypt" ]]; then
-	openssl enc -aes-256-cbc "${openssl_extra[@]+${openssl_extra[@]}}" -salt -in "$input" | dobase64_encode "$output"
+	openssl enc -aes-256-cbc -md sha256 "${openssl_extra[@]+${openssl_extra[@]}}" -salt -in "$input" | dobase64_encode "$output"
 elif [[ "$dosym" = "decrypt" ]]; then
-	openssl enc -d -aes-256-cbc "${openssl_extra[@]+${openssl_extra[@]}}" -in <( dobase64_decode "$input" ) -out "$output"
+	openssl enc -d -aes-256-cbc -md sha256 "${openssl_extra[@]+${openssl_extra[@]}}" -in <( dobase64_decode "$input" ) -out "$output"
 elif [[ -n "$seckey" ]]; then
 	tar -C "$TEMP" -zxf <( dobase64_decode "$input" )
 	if [[ ! -f "$TEMP/key.bin.enc" ]]; then
@@ -104,7 +104,7 @@ elif [[ -n "$seckey" ]]; then
 	fi
 
 	openssl rsautl -decrypt -inkey "$seckey" -in "$TEMP/key.bin.enc" |
-	openssl enc -d -aes-256-cbc "${openssl_extra[@]+${openssl_extra[@]}}" -in "$TEMP/payload.bin.enc" -pass fd:0 | gzip -d -c > "$output"
+	openssl enc -d -aes-256-cbc -md sha256 "${openssl_extra[@]+${openssl_extra[@]}}" -in "$TEMP/payload.bin.enc" -pass fd:0 | gzip -d -c > "$output"
 else
 	if [[ "$(head -c 4 "$pubkey" )" = "ssh-" ]]; then
 		ssh-keygen -f "$pubkey" -e -m PKCS8 > "$TEMP/pub.pem"
@@ -114,7 +114,7 @@ else
 	openssl rand -base64 128 |
 	tee \
 		>( openssl rsautl -encrypt -inkey "$pubkey" -pubin -in /dev/stdin -out "$TEMP/key.bin.enc" && touch "$TEMP/key.bin.ok" || touch "$TEMP/key.bin.fail" ) \
-		| openssl enc -aes-256-cbc "${openssl_extra[@]+${openssl_extra[@]}}" -salt -in <( gzip -c < "$input" ) -out "$TEMP/payload.bin.enc" -pass fd:0
+		| openssl enc -aes-256-cbc -md sha256 "${openssl_extra[@]+${openssl_extra[@]}}" -salt -in <( gzip -c < "$input" ) -out "$TEMP/payload.bin.enc" -pass fd:0
 
 	while [[ ! -e "$TEMP/key.bin.ok" ]] && [[ ! -e "$TEMP/key.bin.fail" ]]; do sleep 0.001; done
 	if [[ -e "$TEMP/key.bin.fail" ]]; then
