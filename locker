@@ -88,6 +88,16 @@ elif [[ "$dosym" = "decrypt" ]]; then
 	openssl enc -d -aes-256-cbc -in <( dobase64_decode "$input" ) -out "$output"
 elif [[ -n "$seckey" ]]; then
 	tar -C "$TEMP" -zxf <( dobase64_decode "$input" )
+	if [[ ! -f "$TEMP/key.bin.enc" ]]; then
+		printf 'Failed to decrypt: encrypted symmetric key not found in extracted archive\n' >&2
+		exit 1
+	fi
+
+	if [[ ! -f "$TEMP/payload.bin.enc" ]]; then
+		printf 'Failed to decrypt: payload not found in extracted archive\n' >&2
+		exit 1
+	fi
+
 	openssl rsautl -decrypt -inkey "$seckey" -in "$TEMP/key.bin.enc" |
 	openssl enc -d -aes-256-cbc -in "$TEMP/payload.bin.enc" -pass fd:0 | gzip -d -c > "$output"
 else
