@@ -8,7 +8,7 @@ trap _cleanup EXIT
 
 usage(){
 	printf 'usage (public-key encrypt): ./locker.sh --public-key=mykey.pub --input=myfile --output=myfile.enc\n'
-	printf 'usage (private-key decrypt): ./locker.sh --private-key=mykey.pub --input=myfile.enc --output=myfile\n'
+	printf 'usage (private-key decrypt): ./locker.sh --private-key=mykey --input=myfile.enc --output=myfile\n'
 	printf 'usage (password encrypt): ./locker.sh --password-encrypt --input=myfile --output=myfile.enc\n'
 	printf 'usage (password decrypt): ./locker.sh --password-decrypt --input=myfile.enc --output=myfile\n'
 	printf 'Other options:\n'
