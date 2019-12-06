@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 base="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 TEMP="$(mktemp -d 'locker.XXXXXXXXXX')"
 [ -n "$TEMP" -a -d "$TEMP" -a -w "$TEMP" ] || exit 1
