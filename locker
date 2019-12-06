@@ -116,5 +116,5 @@ else
 		printf 'Failed to encrypt random key\n' >&2
 		exit 1
 	fi
-	tar --transform='s#.*/##' -c "$TEMP/payload.bin.enc" "$TEMP/key.bin.enc" | gzip -c | dobase64_encode "$output"
+	tar -C "$TEMP" -c "payload.bin.enc" "key.bin.enc" | gzip -c | dobase64_encode "$output"
 fi
